@@ -38,7 +38,7 @@ classes = ('plane', 'car', 'bird', 'cat',
 # The output of torchvision datasets are PILImage images of range [0, 1].
 # We transform them to Tensors of normalized range [-1, 1].
 def main():
-    for a in range(1,9):
+    for a in range(1,2):
         conv1_w = a
         for b in range(1,9):
             conv2_w = b
@@ -86,7 +86,7 @@ def runNet():
     ########################################################################
     # 4. Train the network
 
-    for epoch in range(0):  # loop over the dataset multiple times
+    for epoch in range(2):  # loop over the dataset multiple times
 
         running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
