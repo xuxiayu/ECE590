@@ -35,10 +35,9 @@ classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 ########################################################################
-# The output of torchvision datasets are PILImage images of range [0, 1].
-# We transform them to Tensors of normalized range [-1, 1].
 def main():
-    for a in range(1,2):
+    global conv1_w, conv2_w, fc1_w, fc2_w, fc3_w
+    for a in range(1,3):
         conv1_w = a
         for b in range(1,9):
             conv2_w = b
@@ -53,7 +52,6 @@ def main():
                             runNet()
 
 def runNet():
-
     class Net(nn.Module):
         def __init__(self):
             super(Net, self).__init__()
@@ -84,7 +82,7 @@ def runNet():
     optimizer = optim.Adam(net.parameters(), lr=0.001)
 
     ########################################################################
-    # 4. Train the network
+    # Train the network
 
     for epoch in range(2):  # loop over the dataset multiple times
 
@@ -142,9 +140,9 @@ def runNet():
         print('Accuracy of %5s : %2d %%' % (
             classes[i], 100 * class_correct[i] / class_total[i]))
     
-
     ########################################################################
     #Append CSV
+    print('Finished Training')
     fields = ['']*17
     fields[0] = str(max_bits)
     fields[1] = str(conv1_w)
@@ -159,7 +157,6 @@ def runNet():
     writer = csv.writer(outfile)
     writer.writerow(fields)
     outfile.close()
-
 
 
 if __name__ == '__main__':
