@@ -60,6 +60,7 @@ class Net(nn.Module):
 
 
 net = Net()
+net.to(device)
 
 ########################################################################
 # 3. Define a Loss function and optimizer
