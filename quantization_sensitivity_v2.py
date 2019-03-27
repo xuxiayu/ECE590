@@ -29,7 +29,8 @@ fc3_w = 8
 #follow instructions here to download and format ImageNet data: https://github.com/facebook/fb.resnet.torch/blob/master/INSTALL.md#download-the-imagenet-dataset 
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
 									 std=[0.229, 0.224, 0.225])
-valdir = '../data/ILSVRC2012/small_val' 
+#valdir = '../data/ILSVRC2012/small_val' 
+valdir = 'C/Users/timhoer/Documents/2018-2019/data/ILSVRC2012/small_val'
 val_loader = torch.utils.data.DataLoader(
 		datasets.ImageFolder(valdir, transforms.Compose([
 			transforms.Resize(256),
