@@ -1,3 +1,4 @@
+from .qvgg import *
 from .vgg import *
 from .dpn import *
 from .lenet import *

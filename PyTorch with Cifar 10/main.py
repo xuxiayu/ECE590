@@ -22,8 +22,8 @@ torch.set_num_threads(4)
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
-parser.add_argument('--layer_chunk', default = 0, type=int, help='layer chunk')
-parser.add_argument('--bits', default = 4, type=int, help='weight precision')
+#parser.add_argument('--layer_chunk', default = 0, type=int, help='layer chunk')
+#parser.add_argument('--bits', default = 4, type=int, help='weight precision')
 parser.add_argument('--fn', default = "placeholder", help='filename')
 args = parser.parse_args()
 
@@ -59,12 +59,15 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 
 # Print to csv
 EP = 0
-field = [0]*12
-field[0] = args.layer_chunk
-field[1] = args.bits
+field = [0]*6
+weight_bits = [1, 1, 1, 1, 1, 1]
+for col in range(0,6):
+    field[col]=weight_bits[col]
+
+
 # Model
 print('==> Building model..')
-net = VGG('VGG16', args.layer_chunk, args.bits)
+net = QVGG('VGG16', weight_bits)
 # net = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
@@ -118,9 +121,7 @@ def train(epoch):
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
 def test(epoch):
-    global best_acc
-    global field
-    global EP
+    global best_acc, field, EP, weight_bits, net
     net.eval()
     test_loss = 0
     correct = 0
@@ -139,12 +140,14 @@ def test(epoch):
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-    # Save checkpoint.
+    # Save checkpoint if 5% impovement in accuracy, else increment precision 
     acc = 100.*correct/total
-    field[EP+2] = acc
+    field.append(acc)
     print(field)
-    if acc > best_acc:
-        print('Saving..')
+    if acc > best_acc*1.05:
+        # update best accuracy and proceed
+        best_acc = acc
+        print('==> Saving..')
         state = {
             'net': net.state_dict(),
             'acc': acc,
@@ -153,7 +156,34 @@ def test(epoch):
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
         torch.save(state, './checkpoint/ckpt.t7')
-        best_acc = acc
+    else:
+        print('==> Updating precision..')
+        # write to file
+        outfile = open(output_file, 'a', newline='')
+        writer = csv.writer(outfile)
+        writer.writerow(field)
+        outfile.close()
+        # update weight bits
+        weight_bits = increment_bits(weight_bits)
+        for col in range(0,6):
+            field[col]=weight_bits[col]
+        # update net
+        net = update(net,weight_bits)
+
+# Updating
+def update(net,weight_bits):
+    existing_dict = net.state_dict()
+    new_net = QVGG('VGG16', weight_bits)
+    new_dict = new_net.state_dict()
+    new_dict.update(existing_dict)
+    new_net.load_state_dict(new_dict)
+    return net
+
+def increment_bits(weight_bits):
+    # dummy ranking
+    for precision in weight_bits:
+        precision += 1
+    return weight_bits
 
 
 for epoch in range(start_epoch, start_epoch+10):
@@ -161,10 +191,8 @@ for epoch in range(start_epoch, start_epoch+10):
     train(epoch)
     test(epoch)
      
-    EP = EP + 1
+
+
     
 
-outfile = open(output_file, 'a', newline='')
-writer = csv.writer(outfile)
-writer.writerow(field)
-outfile.close()
+

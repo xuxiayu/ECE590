@@ -10,7 +10,7 @@ import torchvision
 ########################################################################
 # Initialization
 output_file = 'tim_v2.csv'
-conv1_w = 7
+conv1_w = 8
 conv2_w = 8
 conv3_w = 8
 conv4_w = 8
