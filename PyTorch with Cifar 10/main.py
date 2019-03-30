@@ -181,8 +181,8 @@ def update(net,weight_bits):
 
 def increment_bits(weight_bits):
     # dummy ranking
-    for precision in weight_bits:
-        precision += 1
+    for x in range(len(weight_bits)):
+        weight_bits[x] += 1
     return weight_bits
 
 
