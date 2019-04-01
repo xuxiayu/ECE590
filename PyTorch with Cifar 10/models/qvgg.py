@@ -33,13 +33,14 @@ class QVGG(nn.Module):
                 index = index + 1
             else:
                 #print(x)
-                print(weight_bits[index])
+                #print(weight_bits[index])
                 #num_bits=weight_bits, num_bits_grad=weight_bits,biprecision=True
                 layers += [QConv2d(in_channels, x, kernel_size=3, padding=1, num_bits_weight = weight_bits[index]),
                            nn.BatchNorm2d(x),
                            nn.ReLU(inplace=True)]
                 in_channels = x
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
+        #layers += [nn.AdaptiveAvgPool2d((7, 7))]
         return nn.Sequential(*layers)
     
 
