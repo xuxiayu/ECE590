@@ -212,7 +212,7 @@ if args.resume:
 else:
 	start_time = time.time()
 	weight_bits = find_scheme()
-	print(scheme)
+	print(weight_bits)
 	print("--- %s seconds ---" % (time.time() - start_time))
 	used_bits = sum([a*b for a,b in zip(weight_bits,increment_cost)])
 	print('==> Building model..')
