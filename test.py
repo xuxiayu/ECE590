@@ -1,7 +1,7 @@
 import csv
 
 weight_bits = [1,1,1,1,1,1]
-increment_cost = [10,1,1,1,1,1]
+increment_cost = [10,1,1,1,1,1] 
 epoch = 1
 total_bits = 20
 used_bits = 0

@@ -15,15 +15,20 @@ import argparse
 import csv
 from models import *
 from utils import progress_bar
+import itertools
+import time
+start_time = time.time()
 
+increment_cost = [19296, 19296, 110592, 110592, 491520, 491520, 491520, \
+					 1966080, 1966080, 1966080, 2359296, 2359296, 2359296, 5120]
 
 torch.set_num_threads(4)
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
-#parser.add_argument('--layer_chunk', default = 0, type=int, help='layer chunk')
-parser.add_argument('--bits', default = 29431168, type=int, help='total available bits')
+parser.add_argument('--max_prec', default = 4, type=int, help='max weight precision')
+parser.add_argument('--bits', default = 2*sum(increment_cost), type=int, help='total available bits')
 parser.add_argument('--fn', default = "placeholder", help='filename')
 args = parser.parse_args()
 output_file = args.fn + ".csv"
@@ -118,12 +123,12 @@ def load_checkpoint():
 	assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
 	checkpoint = torch.load('./checkpoint/ckpt.t7')
 	best_acc = checkpoint['acc']
-	start_epoch = checkpoint['epoch']
+	start_epoch = checkpoint['epoch']+1
 	weight_bits = checkpoint['weight_bits']
 	net = QVGG('VGG16', weight_bits)
 	net.load_state_dict(checkpoint['net'])
 	field = checkpoint['field']
-	for x in range(len(increment_cost)):
+	for x in range(len(weight_bits)):
 		used_bits += weight_bits[x]*increment_cost[x]
 	#if used bits > total bits, throw error
 	return net
@@ -141,7 +146,7 @@ def update_fields():
 	global field
 	field[0] = total_bits
 	field[1] = used_bits
-	for col in range(2,8):
+	for col in range(2,2+len(weight_bits)):
 		field[col]=weight_bits[col-2]
 
 def write_csv():
@@ -150,21 +155,35 @@ def write_csv():
 	writer.writerow(field)
 	outfile.close()
 
-def increment_bits(weight_bits):
-	global used_bits
-	if epoch<100 and min(weight_bits)<4 and min(increment_cost)<(total_bits-used_bits):
-		sensitivity = [-float('Inf')]*6
-		for chunk in range(len(weight_bits)):
-			#if precion is not maxed and bits are available to increment
-			if weight_bits[chunk]<4 and (total_bits-used_bits)>=increment_cost[chunk]:
-				sensitivity[chunk]=(accuracy_mat[chunk][weight_bits[chunk]][epoch]-accuracy_mat[chunk][weight_bits[chunk]-1][epoch])/increment_cost[chunk]
-		max_improvement = max(sensitivity)
-		max_index = sensitivity.index(max_improvement)
-		if max_improvement > -float('Inf'): #negative infinity
-			weight_bits[max_index] += 1
-			used_bits += increment_cost[max_index]
-	print(weight_bits)
-	return(weight_bits)
+
+# Initialize list of quantization schemes        
+def find_scheme():
+	print('==> Finding quantization scheme..')
+	best_weights = [1]*14
+	if sum(increment_cost)+min(increment_cost)<=total_bits:
+		accuracy = [0]*14
+		counter = 0
+		candidate_list = []
+		best_weights = [1]*14
+		best_accuracy = 0
+		for l1,l2,l3,l4,l5,l6,l7,l8,l9,l10,l11,l12,l13,l14 in itertools.product(range(1,max_precision+1),repeat=14):
+			test_weights = [l1,l2,l3,l4,l5,l6,l7,l8,l9,l10,l11,l12,l13,l14]
+			used_bits = sum([a*b for a,b in zip(test_weights,increment_cost)])
+			#utilization threshold to save time
+			if (used_bits <= total_bits) and (used_bits/total_bits)>.75:
+				for i in range(14):
+					if test_weights[i]>1:
+						accuracy[i]=accuracy_mat[i][test_weights[i]-1]-accuracy_mat[i][0]
+					else:
+						accuracy[i] = 0
+				test_accuracy = sum(accuracy)
+				if test_accuracy>best_accuracy:
+					best_weights = test_weights
+					best_accuracy = test_accuracy
+	elif sum(increment_cost)<=total_bits:
+		return best_weights
+	else:
+		raise Exception('No quantization scheme could be found for the specified number of total bits.')
 
 ##########################################################################################
 ##########################################################################################
@@ -172,19 +191,32 @@ def increment_bits(weight_bits):
 best_acc = 0  # best test accuracy
 acc = 0
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
-increment_cost = [38720-2*64,221440-2*128,1475328-3*256,5899776-512*3,7079424-512*3,512*10]
-weight_bits = [1,1,1,1,1,1]
-total_bits = args.bits
-field = [0]*8
 used_bits = 0
+weight_bits = [0]*len(increment_cost)
+total_bits = args.bits
+max_precision = args.max_prec
+field = [0]*(2+len(weight_bits))
+
+# read in sensitivity analysis
+accuracy_mat = [[0] for x in range(14)]
+with open('quantized_data.csv') as csvDataFile:
+	csvReader = csv.reader(csvDataFile)
+	ind = 0
+	for row in csvReader:
+		accuracy_mat[ind]=list(map(float,row[0:]))
+		ind += 1
+
 # Initialize net
 if args.resume:
 	net = load_checkpoint()
 else:
+	start_time = time.time()
+	weight_bits = find_scheme()
+	print(scheme)
+	print("--- %s seconds ---" % (time.time() - start_time))
+	used_bits = sum([a*b for a,b in zip(weight_bits,increment_cost)])
 	print('==> Building model..')
 	net = QVGG('VGG16', weight_bits)
-	for x in range(len(increment_cost)):
-		used_bits += weight_bits[x]*increment_cost[x]
 net = net.to(device)
 # if device == 'cuda':
 #     net = torch.nn.DataParallel(net)
@@ -193,30 +225,14 @@ net = net.to(device)
 # Initialize csv
 update_fields()
 
-# read in sensitivity analysis
-# accuracy_mat[chunk][bits-1][epoch]
-accuracy_mat = [[0]*4 for x in range(6)]
-with open('../cifar10_data.csv') as csvDataFile:
-	csvReader = csv.reader(csvDataFile)
-	for row in csvReader:
-		chunk = int(row[0])
-		prec =  int(row[1])-1
-		accuracy_mat[chunk][prec]=list(map(float,row[2:]))
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
 for epoch in range(start_epoch, start_epoch+10):
-	create_checkpoint()
 	train(epoch)
 	test(epoch)
-	# try to update precision if accuracy does not increase by threshold
-	if acc < best_acc*1.05:
-		print('==> Updating precision..')
-		# write to file
-		write_csv()
-		# update weight bits
-		weight_bits = increment_bits(weight_bits)
-		update_fields()
-		# update net
-		net = update_net(net,weight_bits)
+	create_checkpoint()
+	write_csv()
+
+	
